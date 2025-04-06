@@ -1,0 +1,84 @@
+#define CLK 23
+#define DT 22
+#define SW 21
+
+#include "GyverEncoder.h" //библиотека энкодера 
+Encoder enc1(CLK, DT, SW);
+int hue = 0; // цвет
+int brightness = 100; // Яркость (0-255)
+bool rgbMode = true; // Режим работы (true - цвет, false - яркость)
+
+#define R_PIN 2
+#define G_PIN 4
+#define B_PIN 15
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(R_PIN, OUTPUT);
+  pinMode(G_PIN, OUTPUT);
+  pinMode(B_PIN, OUTPUT);
+  enc1.setType(TYPE2);
+  enc1.setFastTimeout(40);
+
+}
+
+void loop() {
+  if (enc1.isRight()) hue+=5;  // если был поворот направо, увеличиваем на 1
+  if (enc1.isLeft()) hue-=5;   // если был поворот налево, уменьшаем на 1
+  hue = constrain(hue, 0, 1530);
+  updateColor();
+}
+
+void updateColor() {
+  int r, g, b;
+  
+  // Преобразуем hue в RGB
+  if (hue < 255) {
+    r = 255 - hue;
+    g = hue;
+    b = 0;
+  } else if (hue < 510) {
+    r = 0;
+    g = 255 - (hue - 255);
+    b = hue - 255;
+  } else if (hue < 765) {
+    r = hue - 510;
+    g = 0;
+    b = 255 - (hue - 510);
+  } else if (hue < 1020) {
+    r = 255;
+    g = hue - 765;
+    b = 0;
+  } else if (hue < 1275) {
+    r = 255 - (hue - 1020);
+    g = 255;
+    b = 0;
+  } else {
+    r = 0;
+    g = 255;
+    b = hue - 1275;
+  }
+  
+  // Применяем яркость
+  r = map(r, 0, 255, 0, brightness);
+  g = map(g, 0, 255, 0, brightness);
+  b = map(b, 0, 255, 0, brightness);
+  
+  // Для общего анода раскомментируйте:
+  // r = 255 - r; g = 255 - g; b = 255 - b;
+  
+  analogWrite(R_PIN, r);
+  analogWrite(G_PIN, g);
+  analogWrite(B_PIN, b);
+  
+  Serial.print("Hue: ");
+  Serial.print(hue);
+  Serial.print(" RGB: (");
+  Serial.print(r);
+  Serial.print(",");
+  Serial.print(g);
+  Serial.print(",");
+  Serial.print(b);
+  Serial.print(") Brightness: ");
+  Serial.println(brightness);
+}
