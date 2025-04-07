@@ -1,5 +1,8 @@
 #define PIN_BTN 5 //пин кнопки
-#define PIN_WHITE 13 //пин для белой ленты 
+#define PIN_WHITE 13 //пин для белой ленты
+#define RPIN 2
+#define GPIN 4
+#define BPIN 15
 int leds[] = { 12, 14, 27, 26 }; // пины светодиодов
 int state = 0;
 
@@ -11,10 +14,12 @@ int state = 0;
 #include "GyverEncoder.h" //библиотека энкодера 
 Encoder enc1(CLK, DT, SW);
 int value = 0; // положение энкодера 
-
+int hue = 0;
 
 bool flag = false;
 uint32_t btnTimer = 0;
+
+
 
 void setup() {
   Serial.begin(9600);
@@ -27,6 +32,9 @@ void setup() {
   for (int i = 0; i < 4; i++)
     pinMode(leds[i], OUTPUT);
 
+  pinMode(RPIN, OUTPUT);
+  pinMode(GPIN, OUTPUT);
+  pinMode(BPIN, OUTPUT);
 
 }
 
@@ -80,6 +88,55 @@ void loop() {
 
   if (state == 3){
     analogWrite(13, 0);
-    //rgb
+    enc1.tick();
+
+    if (enc1.isRight()) hue += 10;  // если был поворот направо, увеличиваем на 1
+    if (enc1.isLeft()) hue -= 10;   // если был поворот налево, уменьшаем на 1
+
+    if (enc1.isFastR()) hue += 30;  // если был быстрый поворот направо, увеличиваем на 10
+    if (enc1.isFastL()) hue -= 30;  // если был быстрый поворот налево, уменьшаем на 10
+    // if (enc1.isTurn()) {              // если был совершён поворот (индикатор поворота в любую сторону)
+    //   Serial.println(hue);          // выводим значение при повороте
+    // }
+    if (hue >= 1530) hue = 1530;
+    if (hue <= 0) hue = 0;
+    colorWheel(hue);
   }
+}
+
+void colorWheel(int color) {
+  byte r, g, b;
+  if (color <= 255) {                       // красный макс, зелёный растёт
+    r = 255;
+    g = color;
+    b = 0;
+  }
+  else if (color > 255 && color <= 510) {   // зелёный макс, падает красный
+    r = 510 - color;
+    g = 255;
+    b = 0;
+  }
+  else if (color > 510 && color <= 765) {   // зелёный макс, растёт синий
+    r = 0;
+    g = 255;
+    b = color - 510;
+  }
+  else if (color > 765 && color <= 1020) {  // синий макс, падает зелёный
+    r = 0;
+    g = 1020 - color;
+    b = 255;
+  }
+  else if (color > 1020 && color <= 1275) {   // синий макс, растёт красный
+    r = color - 1020;
+    g = 0;
+    b = 255;
+  }
+  else if (color > 1275 && color <= 1530) { // красный макс, падает синий
+    r = 255;
+    g = 0;
+    b = 1530 - color;
+  }
+  analogWrite(RPIN, 255 - r);
+  analogWrite(GPIN, 255 - g);
+  analogWrite(BPIN, 255 - b);
 }
