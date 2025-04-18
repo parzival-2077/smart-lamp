@@ -19,8 +19,12 @@ int hue = 0;
 bool flag = false;
 uint32_t btnTimer = 0;
 
-
-
+uint32_t checkTimer = 0;
+int lastBrightness = 10; 
+const int threshold = 15;  // Порог чувствительности
+const int smoothDelay = 50;  // Задержка для плавности (мс)
+const int minBrightness = 10;  // Минимальная яркость
+const int maxBrightness = 255; // Максимальная яркость
 void setup() {
   Serial.begin(9600);
 
@@ -35,7 +39,6 @@ void setup() {
   pinMode(RPIN, OUTPUT);
   pinMode(GPIN, OUTPUT);
   pinMode(BPIN, OUTPUT);
-
 }
 
 
@@ -46,6 +49,7 @@ void loop() {
     flag = true;
     btnTimer = millis();
     digitalWrite(leds[state], LOW);
+
     state++;
     if (state >= 4) state = 0;
     Serial.print(state);
@@ -61,8 +65,49 @@ void loop() {
 
   digitalWrite(leds[state], HIGH);
 
-  if (state == 0){
+  if (state == 0){ //авто режим !!НЕ ТРОГАТЬ 
     analogWrite(13, 10);
+    analogWrite(2, 0);
+    analogWrite(4, 0);
+    analogWrite(15, 0);
+    if (millis() - checkTimer >= 600000) {  // Проверка каждые 500 мс
+      checkTimer = millis();
+
+      // Чтение и нормализация значения
+      int rawValue = analogRead(25);
+      int sensorValue = map(max(rawValue, 100), 100, 4095, minBrightness, maxBrightness);
+      sensorValue = constrain(sensorValue, minBrightness, maxBrightness);
+
+      Serial.print("Датчик: ");
+      Serial.print(rawValue);
+      Serial.print(" -> Яркость: ");
+      Serial.print(sensorValue);
+      Serial.print(" | Текущая: ");
+      Serial.println(lastBrightness);
+
+      // Если изменение превышает порог
+      if (abs(sensorValue - lastBrightness) > threshold) {
+        // Плавное изменение
+        int step = (sensorValue > lastBrightness) ? 1 : -1;
+        
+        while (true) {
+          analogWrite(13, lastBrightness);
+          delay(smoothDelay);
+          
+          // Проверяем, достигли ли целевого значения
+          if ((step > 0 && lastBrightness >= sensorValue) || 
+              (step < 0 && lastBrightness <= sensorValue)) {
+            lastBrightness = sensorValue;
+            break;
+          }
+          
+          lastBrightness += step;
+        }
+        
+        Serial.print("Установлена новая яркость: ");
+        Serial.println(lastBrightness);
+      }
+    }
   }
 
   if (state == 1) {
