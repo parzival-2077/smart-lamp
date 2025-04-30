@@ -15,6 +15,14 @@ Release: 27.04.2025
 [?] Добавить по двойному нажатию на энкодер автоматическое проигрования цветового колеса
 [?] Подготовить код в интеграции в веб
 
+Release: 29.04.2025
+-------------------
+[+] Переделал обработку кнопки
+[+] Решен конфликт работы ультразвука и кнопки
+[!] Вылезла фича/баг при удержании для выхода из выключенного состояния перескакивает на режим(все еще есть)
+[?] Добавить изменение яркости RGB режима
+[?] Добавить по двойному нажатию на энкодер автоматическое проигрования цветового колеса
+[?] Подготовить код в интеграции в веб
 */
 
 #define PIN_BTN 5     //пин кнопки
@@ -49,6 +57,12 @@ bool lightEnabled = true;  //флаг света для удержания
 int savedState = 0;        //последний сохраненный режим
 bool distanceControlEnabled = true;
 
+bool manualControl = false;          // Флаг ручного управления
+bool presenceDetected = false;       // Флаг обнаружения присутствия
+unsigned long lastPresenceTime = 0;  // Время последнего обнаружения
+const unsigned long PRESENCE_TIMEOUT = 30000; // 30 сек таймаут
+bool systemEnabled = true;
+
 #include <NewPing.h>
 #define PIN_TRIG 19
 #define PIN_ECHO 18
@@ -80,88 +94,65 @@ void setup() {
 
 
 void loop() {
-  checkDistance();  //проверка наличия человека
-  //logicButton();  //обработка кнопки
-  bool btnState = digitalRead(PIN_BTN);
-  if (btnState && !flag && millis() - btnTimer > 100) {  //нажатие
-    flag = true;
-    btnTimer = millis();
-
-    if (lightEnabled) {  // только если свет включен
-      digitalWrite(leds[state], LOW);
-      state++;
-      if (state >= 4) state = 0;
-      savedState = state;  // сохраняем текущий режим
-    }
+  if (systemEnabled) {
+    checkDistance();  // Проверяем датчик только когда система активна
   }
+  
+  handleButton();
 
-  // Обработка удержания кнопки (включение/выключение света)
-  if (btnState && flag && millis() - btnTimer > 1000) {  // удержание 1 секунда
-    lightEnabled = !lightEnabled;                        // переключаем состояние
-    flag = false;
-    btnTimer = millis();
-
-    if (lightEnabled) {
-      state = savedState;  // восстанавливаем сохраненный режим
+  if (lightEnabled) {
+    // Режимы работы света
+    digitalWrite(leds[state], HIGH);
+    switch(state) {
+      case 0: autoMode(); break;
+      case 1: manualMode(); break;
+      case 2: maxMode(); break;
+      case 3: rgbMode(); break;
     }
-    delay(100);
+  } else {
+    ledOff();
   }
-
-  // Обработка отпускания кнопки
-  if (!btnState && flag) {
-    flag = false;
-    btnTimer = millis();
-  }
-
-  if (lightEnabled && distanceControlEnabled) {
-
-    digitalWrite(leds[state], HIGH);  //отображение режима
-
-    switch (state) {
-      case 0: autoMode(); break;    //авторежим
-      case 1: manualMode(); break;  //ручной режим
-      case 2: maxMode(); break;     //максимальная яркость
-      case 3: rgbMode(); break;     //RGB режим
-    }
-  } else ledOff();
 }
 
+void handleButton() { //обработка кнопки
+  static bool wasPressed = false;
+  static unsigned long pressTime = 0;
+  bool isPressed = digitalRead(PIN_BTN);
 
-/*void logicButton() {
-  bool btnState = digitalRead(PIN_BTN);
-  if (btnState && !flag && millis() - btnTimer > 100) {  //нажатие
-    flag = true;
-    btnTimer = millis();
+  // Нажатие кнопки
+  if (isPressed && !wasPressed) {
+    pressTime = millis();
+    wasPressed = true;
+  }
 
-    if (lightEnabled) {  // только если свет включен
+  // Отпускание кнопки
+  if (!isPressed && wasPressed) {
+    wasPressed = false;
+    unsigned long duration = millis() - pressTime;
+
+    // Короткое нажатие - смена режима
+    if (duration < 1000 && lightEnabled) {
       digitalWrite(leds[state], LOW);
-      state++;
-      if (state >= 4) state = 0;
-      savedState = state;  // сохраняем текущий режим
+      state = (state + 1) % 4;
+      savedState = state;
     }
   }
 
-  // Обработка удержания кнопки (включение/выключение света)
-  if (btnState && flag && millis() - btnTimer > 1000) {  // удержание 1 секунда
-    lightEnabled = !lightEnabled;                        // переключаем состояние
-    flag = false;
-    btnTimer = millis();
-
-    if (lightEnabled) {
-      state = savedState;  // восстанавливаем сохраненный режим
+  // Удержание - вкл/выкл систему
+  if (isPressed && wasPressed && (millis() - pressTime > 1000)) {
+    systemEnabled = !systemEnabled;
+    lightEnabled = systemEnabled;
+    wasPressed = false;
+    
+    if (systemEnabled) {
+      state = savedState;
     }
-    delay(100);
+    delay(200);
   }
+}
 
-  // Обработка отпускания кнопки
-  if (!btnState && flag) {
-    flag = false;
-    btnTimer = millis();
-  }
-}*/
-
-
-void autoMode() {
+//АВТО РЕЖИМ
+void autoMode() { //НЕ ТРОГАТЬ
   analogWrite(13, lastBrightness);  // Всегда используем lastBrightness для плавности
   analogWrite(2, 0);
   analogWrite(4, 0);
@@ -191,6 +182,7 @@ void autoMode() {
   }
 }
 
+//РУЧНОЙ РЕЖИМ
 void manualMode() {
   enc1.tick();
 
@@ -208,11 +200,13 @@ void manualMode() {
   analogWrite(13, lastBrightness);
 }
 
+//МАКСИМАЛЬНАЯ ЯРКОСТЬ
 void maxMode() {
   lastBrightness = 255;
   analogWrite(13, lastBrightness);
 }
 
+//RGB РЕЖИМ
 void rgbMode() {
   analogWrite(13, 0);
   enc1.tick();
@@ -230,6 +224,7 @@ void rgbMode() {
   colorWheel(hue);
 }
 
+//ВЫКЛЮЧЕНИЕ СВЕТОДИОДОВ
 void ledOff() {
   digitalWrite(leds[state], LOW);
   analogWrite(13, 0);
@@ -269,44 +264,27 @@ void colorWheel(int color) {  //цветовое колесо по hue
   analogWrite(BPIN, 255 - b);
 }
 
+//ОПРОС ДАТЧИКА РАССТОЯНИЯ
 void checkDistance() {
-  static uint32_t distanceCheckTimer = 0;
-  if (millis() - distanceCheckTimer >= 50) { // Проверяем расстояние каждые 50 мс
-    distanceCheckTimer = millis();
+  static uint32_t timer = 0;
+  if (millis() - timer >= 50) {
+    timer = millis();
     
     unsigned int distance = sonar.ping_cm();
     Serial.print("Distance: ");
     Serial.print(distance);
     Serial.println(" cm");
+    bool isPersonPresent = (distance > 0 && distance < SMALL_DISTANCE);
 
-    bool isSmallNow = (distance > 0 && distance < SMALL_DISTANCE);
-
-    if (isSmallNow) {
-      lastSmallDistanceTime = millis();
-      wasRecentlySmall = true;
-      if (!lightEnabled && distanceControlEnabled) {
+    if (isPersonPresent) {
+      lastPresenceTime = millis();
+      if (!lightEnabled) {
         lightEnabled = true;
         state = savedState;
-        Serial.println("Light ON (обнаружено близкое расстояние)");
-      }
-    } 
-    else {
-      // Если расстояние большое, запоминаем время последнего большого расстояния
-      if (wasRecentlySmall) {
-        lastLargeDistanceTime = millis();
       }
     }
-
-    // Если было близкое расстояние, но прошло больше DEBOUNCE_TIME с последнего обнаружения
-    if (wasRecentlySmall && (millis() - lastSmallDistanceTime > DEBOUNCE_TIME)) {
-      wasRecentlySmall = false;
-      Serial.println("Расстояние стабильно большое (дебаунс пройден)");
-    }
-
-    // Если свет был включен, но прошло SHUTOFF_DELAY с момента последнего большого расстояния
-    if (lightEnabled && distanceControlEnabled && !wasRecentlySmall && (millis() - lastLargeDistanceTime > SHUTOFF_DELAY)) {
+    else if (lightEnabled && (millis() - lastPresenceTime > PRESENCE_TIMEOUT)) {
       lightEnabled = false;
-      Serial.println("Light OFF (прошло время без близких объектов)");
     }
   }
 }
