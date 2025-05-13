@@ -1,5 +1,5 @@
 # smart-lamp
-Основная программа называется [TEST_BUTTON.ino](https://github.com/parzival-2077/smart-lamp/blob/main/TEST_BUTTON.ino). В ней происходят все апдейты, из нее же можно узнать текущее состояние разработки
+Основная программа называется ~~[TEST_BUTTON.ino](https://github.com/parzival-2077/smart-lamp/blob/main/TEST_BUTTON.ino)~~ [SMART_LAMP_0_4](https://github.com/parzival-2077/smart-lamp/blob/main/SMART_LAMP_0_4.ino) . В ней происходят все апдейты, из нее же можно узнать текущее состояние разработки
 
 ## Функции лампы
 1. Режимы лампы
