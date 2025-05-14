@@ -24,11 +24,18 @@ Release: 29.04.2025
 [?] Добавить по двойному нажатию на энкодер автоматическое проигрования цветового колеса
 [?] Подготовить код в интеграции в веб
 
-Release: 15.02.2025
+Release: 14.02.2025
 -------------------
 [+] Отказ от рефакторинга кода в пользу быстродейственности 
 [+] Исправленна фича с удержание
 [-] Убраны процедуры handleButton, autoMode, maxMode, manualMode, RGBMode
+
+[?] Подготовить код в интеграции в веб
+
+Release: 15.02.2025 
+-------------------
+[+] Отказ от удержание
+[+] Выключение по кнопке энкодера
 
 [?] Подготовить код в интеграции в веб
 */
@@ -105,6 +112,15 @@ void loop() {
   if (systemEnabled) {
     checkDistance();  // Проверяем датчик только когда система активна
   }
+  enc1.tick();
+  if (enc1.isPress()) {
+    Serial.println("Encoder Press");
+    systemEnabled = !systemEnabled;
+    lightEnabled = systemEnabled;
+    if (systemEnabled) {
+      state = savedState;
+    }
+  }
   static bool wasPressed = false;
   static unsigned long pressTime = 0;
   bool isPressed = digitalRead(PIN_BTN);
@@ -124,21 +140,9 @@ void loop() {
     if (duration < 1000 && lightEnabled) {
       digitalWrite(leds[state], LOW);
       state = (state + 1) % 4;
-      savedState = state - 1;
+      savedState = state;
     }
   }
-
-  // Удержание - вкл/выкл систему
-  if (isPressed && wasPressed && (millis() - pressTime > 1000)) {
-    systemEnabled = !systemEnabled;
-    lightEnabled = systemEnabled;
-    wasPressed = false;
-
-    if (systemEnabled) {
-      state = savedState;
-    }
-  }
- 
   if (lightEnabled) {
     // Режимы работы света
     digitalWrite(leds[state], HIGH);
@@ -153,7 +157,7 @@ void loop() {
 
         // Чтение и нормализация значения
         int rawValue = analogRead(25);
-        int sensorValue = map(max(rawValue, 100), 100, 4095, minBrightness, maxBrightness);
+        int sensorValue = map(max(rawValue, 100), 4095, 100, minBrightness, maxBrightness);
         sensorValue = constrain(sensorValue, minBrightness, maxBrightness);
 
         // Плавное изменение
@@ -163,12 +167,12 @@ void loop() {
           lastBrightness = constrain(lastBrightness, minBrightness, maxBrightness);
         }
         //для отладки
-        // Serial.print("Датчик: ");
-        // Serial.print(rawValue);
-        // Serial.print(" -> Яркость: ");
-        // Serial.print(sensorValue);
-        // Serial.print(" | Текущая: ");
-        // Serial.println(lastBrightness);
+        Serial.print("Датчик: ");
+        Serial.print(rawValue);
+        Serial.print(" -> Яркость: ");
+        Serial.print(sensorValue);
+        Serial.print(" | Текущая: ");
+        Serial.println(lastBrightness);
       }
     }
     if (state == 1) {
@@ -211,41 +215,6 @@ void loop() {
   }
 }
 
-void handleButton() {  //обработка кнопки
-  static bool wasPressed = false;
-  static unsigned long pressTime = 0;
-  bool isPressed = digitalRead(PIN_BTN);
-
-  // Нажатие кнопки
-  if (isPressed && !wasPressed) {
-    pressTime = millis();
-    wasPressed = true;
-  }
-
-  // Отпускание кнопки
-  if (!isPressed && wasPressed) {
-    wasPressed = false;
-    unsigned long duration = millis() - pressTime;
-
-    // Короткое нажатие - смена режима
-    if (duration < 1000 && lightEnabled) {
-      digitalWrite(leds[state], LOW);
-      state = (state + 1) % 4;
-      savedState = state;
-    }
-  }
-
-  // Удержание - вкл/выкл систему
-  if (isPressed && wasPressed && (millis() - pressTime > 1000)) {
-    systemEnabled = !systemEnabled;
-    lightEnabled = systemEnabled;
-    wasPressed = false;
-
-    if (systemEnabled) {
-      state = savedState;
-    }
-  }
-}
 
 //ВЫКЛЮЧЕНИЕ СВЕТОДИОДОВ
 void ledOff() {
@@ -294,9 +263,9 @@ void checkDistance() {
     timer = millis();
 
     unsigned int distance = sonar.ping_cm();
-    Serial.print("Distance: ");
-    Serial.print(distance);
-    Serial.println(" cm");
+    // Serial.print("Distance: ");
+    // Serial.print(distance);
+    // Serial.println(" cm");
     bool isPersonPresent = (distance > 0 && distance < SMALL_DISTANCE);
 
     if (isPersonPresent) {
@@ -310,199 +279,3 @@ void checkDistance() {
     }
   }
 }
-
-
-
-
-//не рабочее не трогать 
-/* не работает(долго думает(но пока пусть останется))
-//АВТО РЕЖИМ
-void autoMode() {                   //НЕ ТРОГАТЬ
-  analogWrite(13, lastBrightness);  // Всегда используем lastBrightness для плавности
-  analogWrite(2, 0);
-  analogWrite(4, 0);
-  analogWrite(15, 0);
-
-  if (millis() - checkTimer >= smoothDelay) {  // Проверка с задержкой для плавности
-    checkTimer = millis();
-
-    // Чтение и нормализация значения
-    int rawValue = analogRead(25);
-    int sensorValue = map(max(rawValue, 100), 100, 4095, minBrightness, maxBrightness);
-    sensorValue = constrain(sensorValue, minBrightness, maxBrightness);
-
-    // Плавное изменение
-    if (sensorValue != lastBrightness) {
-      int step = (sensorValue > lastBrightness) ? 1 : -1;
-      lastBrightness += step;
-      lastBrightness = constrain(lastBrightness, minBrightness, maxBrightness);
-    }
-    //для отладки
-    // Serial.print("Датчик: ");
-    // Serial.print(rawValue);
-    // Serial.print(" -> Яркость: ");
-    // Serial.print(sensorValue);
-    // Serial.print(" | Текущая: ");
-    // Serial.println(lastBrightness);
-  }
-}
-
-//РУЧНОЙ РЕЖИМ
-void manualMode() {
-  enc1.tick();
-
-  if (enc1.isRight()) value++;  // если был поворот направо, увеличиваем на 1
-  if (enc1.isLeft()) value--;   // если был поворот налево, уменьшаем на 1
-
-  if (enc1.isFastR()) value += 10;  // если был быстрый поворот направо, увеличиваем на 10
-  if (enc1.isFastL()) value -= 10;  // если был быстрый поворот налево, уменьшаем на 10
-  if (enc1.isTurn()) {              // если был совершён поворот (индикатор поворота в любую сторону)
-    Serial.println(value);          // выводим значение при повороте
-  }
-  if (value >= 255) value = 254;
-  if (value <= 0) value = 1;
-  lastBrightness = value;
-  analogWrite(13, lastBrightness);
-}
-
-//МАКСИМАЛЬНАЯ ЯРКОСТЬ
-void maxMode() {
-  lastBrightness = 255;
-  analogWrite(13, lastBrightness);
-}
-
-//RGB РЕЖИМ
-void rgbMode() {
-  enc1.tick();
-
-  if (enc1.isRight()) hue += 10;  // если был поворот направо, увеличиваем на 1
-  if (enc1.isLeft()) hue -= 10;   // если был поворот налево, уменьшаем на 1
-
-  if (enc1.isFastR()) hue += 30;  // если был быстрый поворот направо, увеличиваем на 10
-  if (enc1.isFastL()) hue -= 30;  // если был быстрый поворот налево, уменьшаем на 10
-  // if (enc1.isTurn()) {              // если был совершён поворот (индикатор поворота в любую сторону)
-  //   Serial.println(hue);          // выводим значение при повороте
-  // }
-  if (hue >= 1530) hue = 1530;
-  if (hue <= 0) hue = 0;
-  colorWheel(hue);
-}
-*/
- //=====================================================================
-  /*static bool wasPressed = false;
-  static unsigned long pressTime = 0;
-  static bool longPressHandled = false;
-  bool isPressed = digitalRead(PIN_BTN);
-
-  // Обработка начала нажатия
-  if (isPressed && !wasPressed) {
-    pressTime = millis();
-    wasPressed = true;
-    longPressHandled = false;
-    return;
-  }
-
-  // Обработка продолжающегося нажатия
-  if (isPressed && wasPressed) {
-    // Проверка на удержание (1000 мс)
-    if (!longPressHandled && (millis() - pressTime > 1000)) {
-      // Переключаем состояние системы
-      systemEnabled = !systemEnabled;
-      lightEnabled = systemEnabled;
-      longPressHandled = true;
-
-      if (systemEnabled) {
-        state = savedState;
-        digitalWrite(leds[state], HIGH);
-      } else {
-        digitalWrite(leds[state], LOW);
-      }
-      return;
-    }
-
-    // Короткое нажатие (обрабатываем сразу при нажатии, а не при отпускании)
-    if (!longPressHandled && (millis() - pressTime > 50) && lightEnabled) {
-      longPressHandled = true;  // Помечаем как обработанное
-
-      digitalWrite(leds[state], LOW);
-      state = (state + 1) % 4;
-      savedState = state;
-      digitalWrite(leds[state], HIGH);
-
-      // Защита от повторного срабатывания
-      delay(200);
-      return;
-    }
-  }
-
-  // Обработка отпускания кнопки
-  if (!isPressed && wasPressed) {
-    wasPressed = false;
-    longPressHandled = false;
-  }
-*/
-//======================================================================================
-  // static bool wasPressed = false;
-  // static unsigned long pressTime = 0;
-  // bool isPressed = digitalRead(PIN_BTN);
-
-  // // Нажатие кнопки
-  // if (isPressed && !wasPressed) {
-  //   pressTime = millis();
-  //   wasPressed = true;
-  // }
-
-  // // Отпускание кнопки
-  // if (!isPressed && wasPressed) {
-  //   wasPressed = false;
-  //   unsigned long duration = millis() - pressTime;
-
-  //   // Короткое нажатие - смена режима
-  //   if (duration < 1000 && lightEnabled) {
-  //     digitalWrite(leds[state], LOW);
-  //     state = (state + 1) % 4;
-  //     savedState = state - 1;
-  //   }
-  // }
-
-  // // Удержание - вкл/выкл систему
-  // if (isPressed && wasPressed && (millis() - pressTime > 1000)) {
-  //   systemEnabled = !systemEnabled;
-  //   lightEnabled = systemEnabled;
-  //   wasPressed = false;
-
-  //   if (systemEnabled) {
-  //     state = savedState;
-  //   }
-  // }
-  //=======================================================================
-  // bool btnState = digitalRead(PIN_BTN);
-  // if (btnState && !flag && millis() - btnTimer > 100) {  //нажатие
-  //   flag = true;
-  //   btnTimer = millis();
-
-  //   if (lightEnabled) {  // только если свет включен
-  //     digitalWrite(leds[state], LOW);
-  //     state++;
-  //     if (state >= 4) state = 0;
-  //     savedState = state;  // сохраняем текущий режим
-  //   }
-  // }
-
-  // // Обработка удержания кнопки (включение/выключение света)
-  // if (btnState && flag && millis() - btnTimer > 1000) {  // удержание 1 секунда
-  //   lightEnabled = !lightEnabled;                        // переключаем состояние
-  //   flag = false;
-  //   btnTimer = millis();
-
-  //   if (lightEnabled) {
-  //     state = savedState;  // восстанавливаем сохраненный режим
-  //   }
-
-  // }
-
-  // // Обработка отпускания кнопки
-  // if (!btnState && flag) {
-  //   flag = false;
-  //   btnTimer = millis();
-  // }
