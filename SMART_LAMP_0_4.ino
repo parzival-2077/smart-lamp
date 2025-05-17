@@ -38,6 +38,13 @@ Release: 15.02.2025
 [+] Выключение по кнопке энкодера
 
 [?] Подготовить код в интеграции в веб
+
+Release: 17.02.2025 
+-------------------
+[+] Переписана обработка кнопки с millis на прерывания
+[+] Убраны лишние переменные 
+[+] Добавлены комменатрии 
+
 */
 
 #define PIN_BTN 5     //пин кнопки
@@ -58,8 +65,6 @@ Encoder enc1(CLK, DT, SW);
 int value = 0;  // положение энкодера
 int hue = 0;    //положение по палитре hue
 
-bool flag = false;
-uint32_t btnTimer = 0;
 
 uint32_t checkTimer = 0;
 int lastBrightness = 10;
@@ -76,20 +81,18 @@ bool manualControl = false;                    // Флаг ручного упр
 bool presenceDetected = false;                 // Флаг обнаружения присутствия
 unsigned long lastPresenceTime = 0;            // Время последнего обнаружения
 const unsigned long PRESENCE_TIMEOUT = 30000;  // 30 сек таймаут
-bool systemEnabled = true;
+bool systemEnabled = true;                     // Включена ли лампа
 
-#include <NewPing.h>
-#define PIN_TRIG 18
+#include <NewPing.h>  // Для ультразувкавого датчика
+#define PIN_TRIG 18   // Пины
 #define PIN_ECHO 19
+
 #define MAX_DISTANCE 200  // максимальное расстояние
 #define SMALL_DISTANCE 60
 #define DEBOUNCE_TIME 2000   // Время стабильности для переключения
 #define SHUTOFF_DELAY 30000  // время для отключения света
 NewPing sonar(PIN_TRIG, PIN_ECHO, MAX_DISTANCE);
-bool ledState = false;
-unsigned long lastSmallDistanceTime = 0;
-unsigned long lastLargeDistanceTime = 0;
-bool wasRecentlySmall = false;
+
 
 void setup() {
   Serial.begin(9600);
@@ -105,14 +108,16 @@ void setup() {
   pinMode(GPIN, OUTPUT);
   pinMode(BPIN, OUTPUT);
   pinMode(PIN_WHITE, OUTPUT);
-}
 
+  attachInterrupt(PIN_BTN, btnInp, FALLING);  // Обработка кнопки
+}
 
 void loop() {
   if (systemEnabled) {
     checkDistance();  // Проверяем датчик только когда система активна
   }
-  enc1.tick();
+
+  enc1.tick();  // Выключение по энкодеру
   if (enc1.isPress()) {
     Serial.println("Encoder Press");
     systemEnabled = !systemEnabled;
@@ -121,33 +126,12 @@ void loop() {
       state = savedState;
     }
   }
-  static bool wasPressed = false;
-  static unsigned long pressTime = 0;
-  bool isPressed = digitalRead(PIN_BTN);
 
-  // Нажатие кнопки
-  if (isPressed && !wasPressed) {
-    pressTime = millis();
-    wasPressed = true;
-  }
-
-  // Отпускание кнопки
-  if (!isPressed && wasPressed) {
-    wasPressed = false;
-    unsigned long duration = millis() - pressTime;
-
-    // Короткое нажатие - смена режима
-    if (duration < 1000 && lightEnabled) {
-      digitalWrite(leds[state], LOW);
-      state = (state + 1) % 4;
-      savedState = state;
-    }
-  }
   if (lightEnabled) {
     // Режимы работы света
     digitalWrite(leds[state], HIGH);
-    if (state == 0) {
-      analogWrite(PIN_WHITE, lastBrightness);  // Всегда используем lastBrightness для плавности
+    if (state == 0) {  // Авто-режим
+      analogWrite(PIN_WHITE, lastBrightness);
       analogWrite(RPIN, 0);
       analogWrite(GPIN, 0);
       analogWrite(BPIN, 0);
@@ -166,16 +150,16 @@ void loop() {
           lastBrightness += step;
           lastBrightness = constrain(lastBrightness, minBrightness, maxBrightness);
         }
-        //для отладки
-        Serial.print("Датчик: ");
-        Serial.print(rawValue);
-        Serial.print(" -> Яркость: ");
-        Serial.print(sensorValue);
-        Serial.print(" | Текущая: ");
-        Serial.println(lastBrightness);
+        // //для отладки
+        // Serial.print("Датчик: ");
+        // Serial.print(rawValue);
+        // Serial.print(" -> Яркость: ");
+        // Serial.print(sensorValue);
+        // Serial.print(" | Текущая: ");
+        // Serial.println(lastBrightness);
       }
     }
-    if (state == 1) {
+    if (state == 1) {  //Ручной режим
       enc1.tick();
 
       if (enc1.isRight()) value++;  // если был поворот направо, увеличиваем на 1
@@ -183,18 +167,19 @@ void loop() {
 
       if (enc1.isFastR()) value += 10;  // если был быстрый поворот направо, увеличиваем на 10
       if (enc1.isFastL()) value -= 10;  // если был быстрый поворот налево, уменьшаем на 10
-      if (enc1.isTurn()) {              // если был совершён поворот (индикатор поворота в любую сторону)
-        Serial.println(value);          // выводим значение при повороте
-      }
+      // if (enc1.isTurn()) {              // если был совершён поворот (индикатор поворота в любую сторону)
+      //   Serial.println(value);          // выводим значение при повороте
+      // }
       if (value >= 255) value = 254;
       if (value <= 0) value = 1;
 
       analogWrite(PIN_WHITE, value);
     }
-    if (state == 2) {
+
+    if (state == 2) {  //Максимальная яркость
       analogWrite(PIN_WHITE, 255);
     }
-    if (state == 3) {
+    if (state == 3) {  // RGB
       analogWrite(PIN_WHITE, 0);
       enc1.tick();
 
@@ -210,9 +195,8 @@ void loop() {
       if (hue <= 0) hue = 0;
       colorWheel(hue);
     }
-  } else {
-    ledOff();
-  }
+
+  } else ledOff();
 }
 
 
@@ -224,7 +208,8 @@ void ledOff() {
   analogWrite(4, 0);
   analogWrite(15, 0);
 }
-void colorWheel(int color) {  //цветовое колесо по hue
+
+void colorWheel(int color) {  // Цветовое колесо по hue
   byte r, g, b;
   if (color <= 255) {  // красный макс, зелёный растёт
     r = 255;
@@ -278,4 +263,10 @@ void checkDistance() {
       lightEnabled = false;
     }
   }
+}
+
+void btnInp() { // Обработка кнопки
+  digitalWrite(leds[state], LOW);
+  state = (state + 1) % 4;
+  savedState = state;
 }
