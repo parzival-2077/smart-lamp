@@ -45,7 +45,18 @@ Release: 17.02.2025
 [+] Убраны лишние переменные 
 [+] Добавлены комменатрии 
 
+Release: 18.02.2025 
+-------------------
+[+] Добавлены первые строчки к Web 
+[+] Web вкл/выкл, переключение режимов
 */
+
+#define AP_SSID "Pixel_5448"
+#define AP_PASS "12345678"
+
+#include <Arduino.h>
+#include <GyverHub.h>
+GyverHub hub;
 
 #define PIN_BTN 5     //пин кнопки
 #define PIN_WHITE 13  //пин для белой ленты
@@ -93,9 +104,33 @@ bool systemEnabled = true;                     // Включена ли ламп
 #define SHUTOFF_DELAY 30000  // время для отключения света
 NewPing sonar(PIN_TRIG, PIN_ECHO, MAX_DISTANCE);
 
+//=====================================================================
+//WEB TEST
+void btn_cb() {
+  systemEnabled = !systemEnabled;
+  lightEnabled = systemEnabled;
+  if (systemEnabled) {
+    state = savedState;
+  }
+}
+
+void btn_cb1() {
+  digitalWrite(leds[state], LOW);
+  state = (state + 1) % 4;
+  savedState = state;
+}
+
+void build(gh::Builder& b) {
+  if (b.beginCol()) {
+  b.Button().label(F("Включение/Выключение")).color(gh::Colors::Red).attach(btn_cb);
+  b.Button().label(F("Переключение режимов")).attach(btn_cb1);
+  b.endCol();
+  }
+}
+//=====================================================================
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   enc1.setType(TYPE2);  //тип энкодера
   enc1.setFastTimeout(40);
@@ -110,9 +145,34 @@ void setup() {
   pinMode(PIN_WHITE, OUTPUT);
 
   attachInterrupt(PIN_BTN, btnInp, FALLING);  // Обработка кнопки
+
+#ifdef GH_ESP_BUILD
+  // подключение к роутеру
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(AP_SSID, AP_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.println(WiFi.localIP());
+  // если нужен MQTT - подключаемся
+  hub.mqtt.config("test.mosquitto.org", 1883);
+#endif
+  hub.config(F("MyDevices"), F("ESP"), F(""));
+  // подключить билдер
+  hub.onBuild(build);
+  // запуск!
+  hub.begin();
 }
 
 void loop() {
+  hub.tick();
+  static gh::Timer tmr(1000);
+  if (tmr) {
+    hub.update(F("title")).value(millis());
+  }
+
   if (systemEnabled) {
     checkDistance();  // Проверяем датчик только когда система активна
   }
@@ -265,7 +325,7 @@ void checkDistance() {
   }
 }
 
-void btnInp() { // Обработка кнопки
+void btnInp() {  // Обработка кнопки
   digitalWrite(leds[state], LOW);
   state = (state + 1) % 4;
   savedState = state;
