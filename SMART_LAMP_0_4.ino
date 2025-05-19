@@ -124,6 +124,9 @@ void build(gh::Builder& b) {
   if (b.beginCol()) {
   b.Button().label(F("Включение/Выключение")).color(gh::Colors::Red).attach(btn_cb);
   b.Button().label(F("Переключение режимов")).attach(btn_cb1);
+  // НЕ ТЕСТИРОВАНО
+  b.Slider(&value).lable(F("Яркость лампы"));
+  b.Slider(&hue).lable(F("Цвет лампы"));
   b.endCol();
   }
 }
