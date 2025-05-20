@@ -49,6 +49,11 @@ Release: 18.02.2025
 -------------------
 [+] Добавлены первые строчки к Web 
 [+] Web вкл/выкл, переключение режимов
+
+Release: 19.02.2025 
+-------------------
+[+] Дописан Web интерфейс 
+[?] Перенести web на локальную сеть самой esp
 */
 
 #define AP_SSID "Pixel_5448"
@@ -124,9 +129,8 @@ void build(gh::Builder& b) {
   if (b.beginCol()) {
   b.Button().label(F("Включение/Выключение")).color(gh::Colors::Red).attach(btn_cb);
   b.Button().label(F("Переключение режимов")).attach(btn_cb1);
-  // НЕ ТЕСТИРОВАНО
-  b.Slider(&value).lable(F("Яркость лампы"));
-  b.Slider(&hue).lable(F("Цвет лампы"));
+  b.Slider(&value).lable(F("Яркость лампы")).range(0, 255, 1);
+  b.Slider(&hue).lable(F("Цвет лампы")).range(0, 255, 1);
   b.endCol();
   }
 }
